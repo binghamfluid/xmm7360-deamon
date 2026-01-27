@@ -376,7 +376,7 @@ sudo systemctl restart NetworkManager
 - [ ] GUI status indicator
 - [ ] IPv6 support
 - [ ] Connection quality metrics
-- [ ] ModemManager integration (long-term)
+- [ ] ModemManager integration (long-term) via Plugin-API
 
 ## References
 
@@ -391,3 +391,5 @@ GPL v2+ (same as xmm7360-pci project)
 ## Credits
 
 Based on the RPC implementation from the xmm7360-pci project.
+Used Claude.AI for fast coding...
+
