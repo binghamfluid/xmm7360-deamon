@@ -1,0 +1,69 @@
+#!/bin/bash
+# NetworkManager Dispatcher Script for XMM7360
+# Place in: /etc/NetworkManager/dispatcher.d/10-xmm7360
+
+INTERFACE=$1
+ACTION=$2
+LOGFILE=/var/log/xmm7360-nm-dispatcher.log
+
+log() {
+    echo "$(date '+%Y-%m-%d %H:%M:%S') [$ACTION] $*" >> "$LOGFILE"
+}
+
+# Only act on wwan0
+if [ "$INTERFACE" != "wwan0" ]; then
+    exit 0
+fi
+
+log "NetworkManager event: $INTERFACE $ACTION"
+
+case "$ACTION" in
+    up)
+        log "Interface wwan0 is up, configuring network..."
+        
+        # Wait a moment for the interface to stabilize
+        sleep 2
+        
+        # Configure interface via DHCP (if needed)
+        if ! ip addr show wwan0 | grep -q "inet "; then
+            log "No IP address, requesting DHCP..."
+            dhclient -v wwan0 >> "$LOGFILE" 2>&1
+        fi
+        
+        # Add default route if not present
+        if ! ip route | grep -q "default.*wwan0"; then
+            log "Adding default route via wwan0"
+            ip route add default dev wwan0 metric 100
+        fi
+        
+        log "wwan0 configuration complete"
+        ;;
+        
+    down)
+        log "Interface wwan0 is down"
+        
+        # Release DHCP lease
+        dhclient -r wwan0 >> "$LOGFILE" 2>&1
+        
+        # Remove routes
+        ip route del default dev wwan0 2>/dev/null
+        
+        log "wwan0 cleanup complete"
+        ;;
+        
+    pre-up)
+        log "Interface wwan0 preparing to come up..."
+        
+        # Ensure xmm7360 daemon is running
+        if ! systemctl is-active --quiet xmm7360.service; then
+            log "Starting xmm7360.service..."
+            systemctl start xmm7360.service
+        fi
+        ;;
+        
+    *)
+        log "Unhandled action: $ACTION"
+        ;;
+esac
+
+exit 0
