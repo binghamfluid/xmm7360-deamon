@@ -5,12 +5,16 @@ Production-ready Python daemon for Intel XMM7360 LTE modems (Fibocom L850-GL) wi
 ## Features
 
 ✅ Automatic modem initialization and connection
+
 ✅ Systemd service integration 
+
 ✅ NetworkManager dispatcher support 
+
 ✅ Auto-reconnect on connection loss 
+
 ✅ Comprehensive logging 
+
 ✅ Configurable APN 
-✅ Works with your existing setup 
 
 ## Quick Start
 
@@ -349,7 +353,7 @@ sudo systemctl stop xmm7360
 sudo systemctl disable xmm7360
 
 # Remove files
-sudo rm /usr/local/bin/xmm7360-daemon.py
+sudo rm /usr/local/bin/xmm7360-daemon-full.py
 sudo rm /etc/systemd/system/xmm7360.service
 sudo rm /etc/NetworkManager/dispatcher.d/10-xmm7360
 sudo rm /var/log/xmm7360-*.log
@@ -364,7 +368,7 @@ sudo systemctl restart NetworkManager
 ## Known Limitations
 
 - APN configuration uses simplified encoding (works for most APNs)
-- No signal strength monitoring (yet)
+- No signal strength monitoring
 - No SMS support
 - IPv6 may require additional configuration
 - No GUI integration (command-line only)
@@ -376,7 +380,7 @@ sudo systemctl restart NetworkManager
 - [ ] GUI status indicator
 - [ ] IPv6 support
 - [ ] Connection quality metrics
-- [ ] ModemManager integration (long-term) via Plugin-API
+- [ ] ModemManager integration via Plugin-API
 
 ## References
 
