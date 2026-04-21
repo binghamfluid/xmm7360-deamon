@@ -604,9 +604,144 @@ class XMM7360Modem:
             logger.error(f"Data channel setup failed: {e}", exc_info=True)
             return False
     
+    def configure_network_interface(self):
+        """Configure wwan0 network interface"""
+        import subprocess
+        
+        logger.info("Configuring network interface wwan0...")
+        
+        try:
+            # Bring interface up
+            logger.info("-> ip link set wwan0 up")
+            subprocess.run(['ip', 'link', 'set', 'wwan0', 'up'], check=True)
+            
+            # Flush any existing addresses
+            subprocess.run(['ip', 'addr', 'flush', 'dev', 'wwan0'], check=True)
+            
+            # Add IP address
+            logger.info(f"-> ip addr add {self.ip_address}/32 dev wwan0")
+            subprocess.run(['ip', 'addr', 'add', f'{self.ip_address}/32', 'dev', 'wwan0'], check=True)
+            
+            # Add default route
+            logger.info("-> ip route add default dev wwan0 metric 100")
+            # First try to delete existing default route via wwan0 (ignore errors)
+            subprocess.run(['ip', 'route', 'del', 'default', 'dev', 'wwan0'], 
+                          stderr=subprocess.DEVNULL, check=False)
+            # Then add new route
+            subprocess.run(['ip', 'route', 'add', 'default', 'dev', 'wwan0', 'metric', '100'], check=True)
+            
+            # Configure DNS
+            logger.info("-> Configuring DNS")
+            self.configure_dns()
+            
+            logger.info("Network interface configured successfully")
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            logger.error(f"Network configuration failed: {e}", exc_info=True)
+            return False
+        except Exception as e:
+            logger.error(f"Unexpected error configuring network: {e}", exc_info=True)
+            return False
+    
+    def configure_dns(self):
+        """Configure DNS servers in /etc/resolv.conf"""
+        try:
+            # Backup resolv.conf
+            resolv_path = '/etc/resolv.conf'
+            
+            # Read current content
+            try:
+                with open(resolv_path, 'r') as f:
+                    current = f.read()
+            except:
+                current = ""
+            
+            # Remove old xmm7360 entries
+            lines = []
+            skip = False
+            for line in current.split('\n'):
+                if '# Added by xmm7360' in line:
+                    skip = True
+                    continue
+                if skip and line.strip() and not line.startswith('nameserver'):
+                    skip = False
+                if not skip:
+                    lines.append(line)
+            
+            # Add new DNS entries
+            lines.append('\n# Added by xmm7360')
+            for dns in self.dns_servers['v4'][:2]:  # Only first 2 IPv4 DNS
+                lines.append(f'nameserver {dns}')
+            
+            # Write back
+            with open(resolv_path, 'w') as f:
+                f.write('\n'.join(lines))
+            
+            logger.info(f"DNS configured: {', '.join(self.dns_servers['v4'][:2])}")
+            
+        except Exception as e:
+            logger.warning(f"DNS configuration failed (non-critical): {e}")
+    
+    def cleanup_network_interface(self):
+        """Clean up network interface on disconnect"""
+        import subprocess
+        
+        logger.info("Cleaning up network interface...")
+        
+        try:
+            # Remove default route
+            subprocess.run(['ip', 'route', 'del', 'default', 'dev', 'wwan0'], 
+                          stderr=subprocess.DEVNULL, check=False)
+            
+            # Flush addresses
+            subprocess.run(['ip', 'addr', 'flush', 'dev', 'wwan0'], 
+                          stderr=subprocess.DEVNULL, check=False)
+            
+            # Bring interface down
+            subprocess.run(['ip', 'link', 'set', 'wwan0', 'down'], 
+                          stderr=subprocess.DEVNULL, check=False)
+            
+            # Clean up DNS entries
+            self.cleanup_dns()
+            
+            logger.info("Network interface cleaned up")
+            
+        except Exception as e:
+            logger.warning(f"Network cleanup failed (non-critical): {e}")
+    
+    def cleanup_dns(self):
+        """Remove DNS entries from /etc/resolv.conf"""
+        try:
+            resolv_path = '/etc/resolv.conf'
+            
+            # Read current content
+            with open(resolv_path, 'r') as f:
+                current = f.read()
+            
+            # Remove xmm7360 entries
+            lines = []
+            skip = False
+            for line in current.split('\n'):
+                if '# Added by xmm7360' in line:
+                    skip = True
+                    continue
+                if skip and line.strip() and not line.startswith('nameserver'):
+                    skip = False
+                if not skip:
+                    lines.append(line)
+            
+            # Write back
+            with open(resolv_path, 'w') as f:
+                f.write('\n'.join(lines))
+            
+        except Exception as e:
+            logger.warning(f"DNS cleanup failed (non-critical): {e}")
+    
     def disconnect(self):
         """Disconnect"""
         logger.info("Disconnecting...")
+        self.cleanup_network_interface()
         self.connected = False
         self.rpc.close()
     
@@ -625,6 +760,11 @@ class XMM7360Modem:
             return False
         
         if not self.setup_data_channel():
+            return False
+        
+        # Configure network interface
+        if not self.configure_network_interface():
+            logger.error("Network interface configuration failed")
             return False
         
         return True
